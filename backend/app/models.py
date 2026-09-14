@@ -15,6 +15,7 @@ class EarningsCall(Base):
     company_name   = Column(String(200))
     quarter        = Column(String(10), nullable=False)  # e.g. "2026Q1"
     transcript_raw = Column(Text)
+    segments       = Column(JSON)
     fetched_at     = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
