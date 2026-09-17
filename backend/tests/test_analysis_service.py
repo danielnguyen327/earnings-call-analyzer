@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import EarningsCall
 from app.services.analysis_service import AnalysisService
-from app.services.gemini_client import AnalysisResult
+from app.services.claude_client import AnalysisResult
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def db_session():
     session.close()
 
 
-class FakeGeminiClient:
+class FakeClaudeClient:
     def __init__(self, result: AnalysisResult):
         self.result = result
         self.calls = []
@@ -62,7 +62,7 @@ def _seed_call(db_session, ticker="AAPL", quarter="2024Q3"):
 
 def test_analyze_creates_row(db_session):
     _seed_call(db_session)
-    client = FakeGeminiClient(SAMPLE_RESULT)
+    client = FakeClaudeClient(SAMPLE_RESULT)
     service = AnalysisService(db_session, client=client)
 
     analysis = service.analyze("aapl", "2024Q3")
@@ -76,7 +76,7 @@ def test_analyze_creates_row(db_session):
 
 def test_analyze_skips_when_already_analyzed(db_session):
     _seed_call(db_session)
-    client = FakeGeminiClient(SAMPLE_RESULT)
+    client = FakeClaudeClient(SAMPLE_RESULT)
     service = AnalysisService(db_session, client=client)
 
     first = service.analyze("AAPL", "2024Q3")
@@ -87,7 +87,7 @@ def test_analyze_skips_when_already_analyzed(db_session):
 
 
 def test_analyze_raises_when_transcript_missing(db_session):
-    client = FakeGeminiClient(SAMPLE_RESULT)
+    client = FakeClaudeClient(SAMPLE_RESULT)
     service = AnalysisService(db_session, client=client)
 
     with pytest.raises(ValueError, match="No transcript found"):

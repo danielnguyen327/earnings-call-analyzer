@@ -2,12 +2,12 @@ from sqlalchemy.orm import Session
 
 from app.models import Analysis, EarningsCall
 from app.segmentation import segment_text
-from app.services.gemini_client import GeminiAnalysisClient
+from app.services.claude_client import ClaudeAnalysisClient
 
 class AnalysisService:
-    def __init__(self, db: Session, client: GeminiAnalysisCleint | None = None):
+    def __init__(self, db: Session, client: ClaudeAnalysisClient | None = None):
         self.db = db
-        self.client = client or GeminiAnalysisClient()
+        self.client = client or ClaudeAnalysisClient()
 
     def get_existing(self, ticker: str, quarter: str) -> Analysis | None:
         return (

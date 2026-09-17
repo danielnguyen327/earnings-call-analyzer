@@ -3,7 +3,7 @@ import httpx
 import pytest
 import respx
 
-from app.transcript_client import TranscriptClient
+from app.transcript_client import TranscriptClient, _recent_quarters
 
 BASE_URL = "https://www.alphavantage.co/query"
 
@@ -60,20 +60,20 @@ def test_fetch_transcript_no_transcript_found():
 
 @respx.mock
 def test_fetch_latest_falls_back_across_quarters():
+    third_quarter = _recent_quarters()[2]
     route = respx.get(BASE_URL)
     route.side_effect = [
-        httpx.Response(200, json={"symbol": "AAPL", "quarter": "2024Q3"}),  # no transcript key
-        httpx.Response(200, json={"symbol": "AAPL", "quarter": "2024Q2"}),  # no transcript key
+        httpx.Response(200, json={"symbol": "AAPL"}),  # no transcript key
+        httpx.Response(200, json={"symbol": "AAPL"}),  # no transcript key
         httpx.Response(200, json={
             "symbol": "AAPL",
-            "quarter": "2024Q1",
             "transcript": [{"speaker": "CFO", "title": "CFO", "content": "Solid results."}],
         }),
     ]
 
     result = run(TranscriptClient().fetch_latest("AAPL"))
 
-    assert result["quarter"] == "2024Q1"
+    assert result["quarter"] == third_quarter
     assert route.call_count == 3
 
 

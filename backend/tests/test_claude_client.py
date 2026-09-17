@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.gemini_client import GeminiAnalysisClient, GeminiAnalysisError
+from app.services.claude_client import ClaudeAnalysisClient, ClaudeAnalysisError
 
 VALID_JSON = (
     '{"overall_sentiment": "positive", "sentiment_score": 0.8, '
@@ -15,7 +15,7 @@ VALID_JSON = (
 
 
 def _response(text):
-    return SimpleNamespace(text=text)
+    return SimpleNamespace(content=[SimpleNamespace(text=text)])
 
 
 def _segments():
@@ -23,32 +23,32 @@ def _segments():
 
 
 def test_analyze_succeeds_on_first_try():
-    client = GeminiAnalysisClient()
-    client.client.models.generate_content = MagicMock(return_value=_response(VALID_JSON))
+    client = ClaudeAnalysisClient()
+    client.client.messages.create = MagicMock(return_value=_response(VALID_JSON))
 
     result = client.analyze("TestCorp", "2024Q3", _segments())
 
     assert result.overall_sentiment == "positive"
-    assert client.client.models.generate_content.call_count == 1
+    assert client.client.messages.create.call_count == 1
 
 
 def test_analyze_retries_once_on_malformed_json_then_succeeds():
-    client = GeminiAnalysisClient()
-    client.client.models.generate_content = MagicMock(
+    client = ClaudeAnalysisClient()
+    client.client.messages.create = MagicMock(
         side_effect=[_response("not json"), _response(VALID_JSON)]
     )
 
     result = client.analyze("TestCorp", "2024Q3", _segments())
 
     assert result.overall_sentiment == "positive"
-    assert client.client.models.generate_content.call_count == 2
+    assert client.client.messages.create.call_count == 2
 
 
 def test_analyze_raises_after_exhausting_retries():
-    client = GeminiAnalysisClient()
-    client.client.models.generate_content = MagicMock(return_value=_response("still not json"))
+    client = ClaudeAnalysisClient()
+    client.client.messages.create = MagicMock(return_value=_response("still not json"))
 
-    with pytest.raises(GeminiAnalysisError):
+    with pytest.raises(ClaudeAnalysisError):
         client.analyze("TestCorp", "2024Q3", _segments())
 
-    assert client.client.models.generate_content.call_count == 2
+    assert client.client.messages.create.call_count == 2
