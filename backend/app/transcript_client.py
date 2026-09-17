@@ -1,5 +1,22 @@
+from datetime import date
+
 import httpx
 from .config import settings
+
+
+def _recent_quarters(n: int = 8) -> list[str]:
+    """Returns the current quarter and the n-1 quarters before it,
+    most recent first, e.g. ["2026Q3", "2026Q2", ..., "2024Q4"].
+    """
+    today = date.today()
+    year, quarter = today.year, (today.month - 1) // 3 + 1
+    quarters = []
+    for _ in range(n):
+        quarters.append(f"{year}Q{quarter}")
+        quarter -= 1
+        if quarter == 0:
+            quarter, year = 4, year - 1
+    return quarters
 
 
 class TranscriptClient:
@@ -31,10 +48,7 @@ class TranscriptClient:
             }
 
     async def fetch_latest(self, ticker: str) -> dict:
-        candidates = [
-            "2024Q3", "2024Q2", "2024Q1",
-            "2023Q4", "2023Q3", "2023Q2"
-        ]
+        candidates = _recent_quarters()
         last_error = None
         for quarter in candidates:
             try:

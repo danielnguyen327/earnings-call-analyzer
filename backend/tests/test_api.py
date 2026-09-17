@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.services.gemini_client import AnalysisResult
+from app.services.claude_client import AnalysisResult
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ def test_analyze_then_get_and_list(client, monkeypatch):
         fake_fetch_transcript,
     )
     monkeypatch.setattr(
-        "app.services.analysis_service.GeminiAnalysisClient.analyze",
+        "app.services.analysis_service.ClaudeAnalysisClient.analyze",
         lambda self, company_name, quarter, segments_text: SAMPLE_ANALYSIS_RESULT,
     )
 

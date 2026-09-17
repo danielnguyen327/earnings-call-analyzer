@@ -5,14 +5,14 @@ from .config import settings
 from .database import Base, engine
 from . import models  # noqa: F401 — needed to register models with Base
 from .routers import calls, analyses
-from .services.gemini_client import GeminiAnalysisError
+from .services.claude_client import ClaudeAnalysisError
 
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Earnings Call Analyzer",
-    description="AI-powered earnings call sentiment analysis using Google Gemini",
+    description="AI-powered earnings call sentiment analysis using Claude",
     version="0.1.0"
 )
 
@@ -44,8 +44,8 @@ async def value_error_handler(request: Request, exc: ValueError):
     )
 
 
-@app.exception_handler(GeminiAnalysisError)
-async def gemini_error_handler(request: Request, exc: GeminiAnalysisError):
+@app.exception_handler(ClaudeAnalysisError)
+async def claude_error_handler(request: Request, exc: ClaudeAnalysisError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 @app.get("/health")
@@ -55,6 +55,6 @@ async def health():
         "status": "ok",
         "env": settings.app_env,
         "alpha_vantage_set": bool(settings.alpha_vantage_api_key),
-        "gemini_set": bool(settings.google_gemini_api_key),
+        "anthropic_set": bool(settings.anthropic_api_key),
         "database": "connected"
     }
