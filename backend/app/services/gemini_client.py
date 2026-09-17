@@ -1,4 +1,5 @@
 import json
+import time
 
 from google import genai
 from google.genai import types
@@ -67,7 +68,7 @@ class GeminiAnalysisClient:
         )
         
         last_error: Exception | None = None
-        for _ in range(MAX_ATTEMPTS):
+        for attempt in range(MAX_ATTEMPTS):
             try:
                 response = self.client.models.generate_content(
                     model=self.model_name,
@@ -78,6 +79,8 @@ class GeminiAnalysisClient:
                 return AnalysisResult.model_validate(data)
             except (json.JSONDecodeError, ValidationError, genai_errors.APIError) as e:
                 last_error = e
+                if attempt < MAX_ATTEMPTS - 1:
+                    time.sleep(2)
                 continue
 
         raise GeminiAnalysisError(
