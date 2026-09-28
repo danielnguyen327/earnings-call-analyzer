@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: callscope-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: https://callscope-frontend.onrender.com
+
+  - type: web
+    name: callscope-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://callscope-backend.onrender.com
