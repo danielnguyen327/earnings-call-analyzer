@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import Base, engine
 from . import models  # noqa: F401 — needed to register models with Base
-from .routers import calls, analyses
+from .routers import calls, analyses, companies
 from .services.claude_client import ClaudeAnalysisError
 
 # Create all database tables on startup
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 app.include_router(calls.router)
 app.include_router(analyses.router)
+app.include_router(companies.router)
 
 def _status_code_for(message: str) -> int:
     lowered = message.lower()

@@ -24,7 +24,7 @@ class EarningsCall(Base):
 
 
 class Analysis(Base):
-    """Gemini AI analysis result for an earnings call."""
+    """Claude AI analysis result for an earnings call."""
     __tablename__ = "analyses"
 
     id                    = Column(Integer, primary_key=True, index=True)

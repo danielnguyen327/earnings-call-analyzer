@@ -47,6 +47,30 @@ class TranscriptClient:
                 "transcript": data["transcript"]
             }
 
+    async def search_companies(self, keywords: str) -> list[dict]:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(self.BASE_URL, params={
+                "function": "SYMBOL_SEARCH",
+                "keywords": keywords,
+                "apikey": settings.alpha_vantage_api_key
+            })
+            response.raise_for_status()
+            data = response.json()
+
+            if "Information" in data:
+                raise ValueError(f"API limit reached: {data['Information']}")
+
+            results = []
+            for m in data.get("bestMatches", []):
+                if m.get("3. type") == "Equity" and m.get("4. region") == "United States":
+                    results.append({
+                        "symbol": m.get("1. symbol"),
+                        "name": m.get("2. name"),
+                        "match_score": float(m.get("9. matchScore", 0)),
+                    })
+            results.sort(key=lambda r: r["match_score"], reverse=True)
+            return results
+
     async def fetch_latest(self, ticker: str) -> dict:
         candidates = _recent_quarters()
         last_error = None
