@@ -26,5 +26,19 @@ export function getAnalysis(ticker, quarter) {
 }
 
 export function listAnalyses(ticker) {
-  return request(`/analyses?ticker=${encodeURIComponent(ticker)}`)
+  const query = ticker ? `?ticker=${encodeURIComponent(ticker)}` : ""
+  return request(`/analyses${query}`)
+}
+
+export function getRecentAnalyses(limit = 5) {
+  return request(`/analyses/recent?limit=${limit}`)
+}
+
+export function searchCompanies(query) {
+  return request(`/companies/search?q=${encodeURIComponent(query)}`)
+}
+
+export function clearHistory(ticker) {
+  const query = ticker ? `?ticker=${encodeURIComponent(ticker)}` : ""
+  return request(`/analyses${query}`, { method: "DELETE" })
 }
