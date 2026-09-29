@@ -6,6 +6,7 @@ from .database import Base, engine
 from . import models  # noqa: F401 — needed to register models with Base
 from .routers import calls, analyses, companies
 from .services.claude_client import ClaudeAnalysisError
+from .transcript_client import ProviderUnavailableError
 
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -49,13 +50,18 @@ async def value_error_handler(request: Request, exc: ValueError):
 async def claude_error_handler(request: Request, exc: ClaudeAnalysisError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
+
+@app.exception_handler(ProviderUnavailableError)
+async def provider_error_handler(request: Request, exc: ProviderUnavailableError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 @app.get("/health")
 async def health():
     """Health check — confirms app is running and keys are loaded."""
     return {
         "status": "ok",
         "env": settings.app_env,
-        "alpha_vantage_set": bool(settings.alpha_vantage_api_key),
         "anthropic_set": bool(settings.anthropic_api_key),
+        "equibles_set": bool(settings.equibles_api_key),
         "database": "connected"
     }

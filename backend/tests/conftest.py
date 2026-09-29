@@ -3,9 +3,9 @@ import pytest
 
 @pytest.fixture
 def sample_turns():
-    """A minimal but representative Alpha Vantage transcript payload:
-    IR intro, CEO, CFO prepared remarks, then two analyst Q&A rounds,
-    then closing remarks — mirrors the real AAPL response shape.
+    """A minimal but representative transcript in the shape TranscriptClient
+    returns: IR intro, CEO, CFO prepared remarks, then two analyst Q&A rounds,
+    then closing remarks.
     """
     return [
         {"speaker": "IR Person", "title": "Director of Investor Relations",

@@ -14,8 +14,8 @@ function SearchScreen({ onSubmit, error }) {
   const [recent, setRecent] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [suggestionsDisabled, setSuggestionsDisabled] = useState(false)
   const debounceRef = useRef(null)
+  const latestQueryRef = useRef("")
 
   useEffect(() => {
     getRecentAnalyses().then(setRecent).catch(() => setRecent([]))
@@ -28,26 +28,26 @@ function SearchScreen({ onSubmit, error }) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     const query = value.trim()
-    if (query.length < 2 || suggestionsDisabled) {
+    latestQueryRef.current = query
+    if (query.length < 2) {
       setSuggestions([])
       return
     }
 
     debounceRef.current = setTimeout(() => {
       searchCompanies(query)
-        .then(setSuggestions)
-        .catch((err) => {
-          setSuggestions([])
-          // Once we hit a rate limit, stop retrying on every keystroke —
-          // it won't succeed again until the quota resets.
-          if (err.message?.toLowerCase().includes("api limit reached")) {
-            setSuggestionsDisabled(true)
-          }
+        .then((results) => {
+          // A slower request can finish after a newer one; only show the latest.
+          if (latestQueryRef.current === query) setSuggestions(results)
         })
-    }, 400)
+        .catch(() => {
+          if (latestQueryRef.current === query) setSuggestions([])
+        })
+    }, 200)
   }
 
   function selectSuggestion(symbol) {
+    latestQueryRef.current = ""
     setTicker(symbol)
     setSuggestions([])
     setShowSuggestions(false)
@@ -94,7 +94,7 @@ function SearchScreen({ onSubmit, error }) {
               autoComplete="off"
               className="w-full bg-navy-2 border border-border-amber rounded-md px-4 py-2.5 font-mono text-sm text-ink uppercase tracking-wide placeholder:normal-case placeholder:text-muted placeholder:tracking-normal outline-none focus:border-amber-border"
             />
-            {showSuggestions && !suggestionsDisabled && suggestions.length > 0 && (
+            {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-navy-2 border border-border-amber rounded-md overflow-hidden z-10 text-left">
                 {suggestions.map((s) => (
                   <button
@@ -110,11 +110,6 @@ function SearchScreen({ onSubmit, error }) {
               </div>
             )}
           </div>
-          {suggestionsDisabled && (
-            <p className="text-[11px] text-muted text-left -mt-1">
-              Company search unavailable (API limit reached) — you can still enter a ticker directly.
-            </p>
-          )}
           <input
             type="text"
             placeholder="Quarter, e.g. 2026Q3"

@@ -1,14 +1,10 @@
 from fastapi import APIRouter
 
-from app.transcript_client import TranscriptClient
+from app.company_directory import directory
 
 router = APIRouter(tags=["companies"])
 
 
 @router.get("/companies/search")
 async def search_companies(q: str):
-    query = q.strip()
-    if not query:
-        return []
-    client = TranscriptClient()
-    return await client.search_companies(query)
+    return await directory.search(q)

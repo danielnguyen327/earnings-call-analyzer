@@ -38,16 +38,3 @@ class TranscriptService:
 
         data = await self.client.fetch_transcript(ticker, quarter)
         return self._store(data)
-
-    async def fetch_latest_and_store(self, ticker: str) -> EarningsCall:
-        """Fetch the most recent available transcript for a ticker.
-        Note: we don't know which quarter it'll be until the API responds,
-        so this always makes at least one API call — but never stores a
-        duplicate row if that quarter was already fetched.
-        """
-        data = await self.client.fetch_latest(ticker)
-        existing = self.get_existing(data["ticker"], data["quarter"])
-        if existing is not None:
-            return existing
-        return self._store(data)
-    

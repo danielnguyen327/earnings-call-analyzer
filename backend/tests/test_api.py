@@ -4,9 +4,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.company_directory import Company, directory
+from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.services.claude_client import AnalysisResult
+from app.transcript_client import ProviderUnavailableError
 
 
 @pytest.fixture
@@ -140,3 +143,30 @@ def test_fetch_api_limit_returns_429(client, monkeypatch):
 
     resp = client.post("/calls/AAPL/2024Q3/fetch")
     assert resp.status_code == 429
+
+
+def test_provider_timeout_returns_503_with_cors_header(client, monkeypatch):
+    async def fake_fetch_transcript(self, ticker, quarter):
+        raise ProviderUnavailableError("The transcript provider took too long to respond, try again in a minute")
+
+    monkeypatch.setattr(
+        "app.services.transcript_service.TranscriptClient.fetch_transcript",
+        fake_fetch_transcript,
+    )
+
+    origin = settings.cors_origins_list[0]
+    resp = client.post("/calls/NVDA/2027Q1/fetch", headers={"Origin": origin})
+    assert resp.status_code == 503
+    assert "took too long" in resp.json()["detail"]
+    # Without this header the browser hides the message and shows "Failed to fetch".
+    assert resp.headers["access-control-allow-origin"] == origin
+
+def test_company_search_endpoint(client, monkeypatch):
+    async def fake_companies():
+        return [Company("AAPL", "Apple Inc.", True), Company("MSFT", "Microsoft Corporation", True)]
+
+    monkeypatch.setattr(directory, "_get_companies", fake_companies)
+
+    resp = client.get("/companies/search", params={"q": "apple"})
+    assert resp.status_code == 200
+    assert resp.json() == [{"symbol": "AAPL", "name": "Apple Inc."}]

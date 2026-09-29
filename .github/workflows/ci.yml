@@ -39,7 +39,7 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/earnings_analyzer_test
-          ALPHA_VANTAGE_API_KEY: test-key
           ANTHROPIC_API_KEY: test-key
+          EQUIBLES_API_KEY: test-key
           APP_ENV: test
         run: pytest tests/ -v

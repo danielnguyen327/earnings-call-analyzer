@@ -1,87 +1,94 @@
-from datetime import date
+import re
 
 import httpx
 from .config import settings
 
+EQUIBLES_URL = "https://api.equibles.com/v1"
+TURNS_PER_PAGE = 200
 
-def _recent_quarters(n: int = 8) -> list[str]:
-    """Returns the current quarter and the n-1 quarters before it,
-    most recent first, e.g. ["2026Q3", "2026Q2", ..., "2024Q4"].
-    """
-    today = date.today()
-    year, quarter = today.year, (today.month - 1) // 3 + 1
-    quarters = []
-    for _ in range(n):
-        quarters.append(f"{year}Q{quarter}")
-        quarter -= 1
-        if quarter == 0:
-            quarter, year = 4, year - 1
-    return quarters
+
+class ProviderUnavailableError(Exception):
+    pass
+
+
+def _parse_quarter(quarter: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(\d{4})Q([1-4])", quarter.strip().upper())
+    if not match:
+        raise ValueError(f"Invalid quarter '{quarter}', expected a format like 2026Q1")
+    return int(match[1]), int(match[2])
+
+
+def _to_turn(turn: dict) -> dict:
+    role = turn.get("speakerRole") or ""
+    # Equibles labels analysts "Analyst — <firm>"; segmentation looks for a plain "Analyst" title.
+    title = "Analyst" if role.startswith("Analyst") else role
+    return {
+        "speaker": turn.get("speakerName") or role or "Unknown",
+        "title": title,
+        "content": turn.get("text") or "",
+    }
+
+
+def _company_name(event_title: str | None, ticker: str) -> str:
+    # "Nvidia Corp Q1 FY2027 Earnings Call" -> "Nvidia Corp"
+    match = re.match(r"(.+?)\s+Q[1-4]\s+FY\d{4}\b", event_title or "")
+    return match[1] if match else ticker
+
+
+def _error_message(response: httpx.Response) -> str:
+    try:
+        return response.json()["error"]["message"]
+    except (ValueError, KeyError, TypeError):
+        return ""
 
 
 class TranscriptClient:
-    BASE_URL = "https://www.alphavantage.co/query"
-
     async def fetch_transcript(self, ticker: str, quarter: str) -> dict:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(self.BASE_URL, params={
-                "function": "EARNINGS_CALL_TRANSCRIPT",
-                "symbol": ticker.upper(),
-                "quarter": quarter,
-                "apikey": settings.alpha_vantage_api_key
-            })
-            response.raise_for_status()
-            data = response.json()
+        ticker = ticker.upper()
+        if not re.fullmatch(r"[A-Z0-9.\-]{1,10}", ticker):
+            raise ValueError(f"Invalid ticker: {ticker}")
+        fiscal_year, fiscal_quarter = _parse_quarter(quarter)
+        path = f"/stocks/{ticker}/earnings-calls/{fiscal_year}/{fiscal_quarter}/speakers"
+        headers = {"Authorization": f"Bearer {settings.equibles_api_key}"}
 
-            if "Information" in data:
-                raise ValueError(f"API limit reached: {data['Information']}")
-            if "Error Message" in data:
-                raise ValueError(f"Invalid ticker: {data['Error Message']}")
-            if "transcript" not in data:
-                raise ValueError(f"No transcript found for {ticker} {quarter}")
+        turns: list[dict] = []
+        async with httpx.AsyncClient(base_url=EQUIBLES_URL, headers=headers, timeout=30) as client:
+            while True:
+                page = await self._equibles_get(
+                    client, path, {"limit": TURNS_PER_PAGE, "offset": len(turns)}, ticker, quarter
+                )
+                turns.extend(page.get("data") or [])
+                if not page.get("hasMore") or not page.get("data"):
+                    break
 
-            return {
-                "ticker": ticker.upper(),
-                "quarter": quarter,
-                "company_name": data.get("symbol", ticker.upper()),
-                "transcript": data["transcript"]
-            }
+        if not turns:
+            raise ValueError(f"No transcript found for {ticker} {quarter}")
 
-    async def search_companies(self, keywords: str) -> list[dict]:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(self.BASE_URL, params={
-                "function": "SYMBOL_SEARCH",
-                "keywords": keywords,
-                "apikey": settings.alpha_vantage_api_key
-            })
-            response.raise_for_status()
-            data = response.json()
+        return {
+            "ticker": ticker,
+            "quarter": quarter,
+            "company_name": _company_name(page.get("eventTitle"), ticker),
+            "transcript": [_to_turn(t) for t in turns],
+        }
 
-            if "Information" in data:
-                raise ValueError(f"API limit reached: {data['Information']}")
+    async def _equibles_get(
+        self, client: httpx.AsyncClient, path: str, params: dict, ticker: str, quarter: str
+    ) -> dict:
+        try:
+            response = await client.get(path, params=params)
+        except httpx.TimeoutException as e:
+            raise ProviderUnavailableError("The transcript provider took too long to respond, try again in a minute") from e
+        except httpx.HTTPError as e:
+            raise ProviderUnavailableError("Couldn't reach the transcript provider, try again in a minute") from e
 
-            results = []
-            for m in data.get("bestMatches", []):
-                if m.get("3. type") == "Equity" and m.get("4. region") == "United States":
-                    results.append({
-                        "symbol": m.get("1. symbol"),
-                        "name": m.get("2. name"),
-                        "match_score": float(m.get("9. matchScore", 0)),
-                    })
-            results.sort(key=lambda r: r["match_score"], reverse=True)
-            return results
-
-    async def fetch_latest(self, ticker: str) -> dict:
-        candidates = _recent_quarters()
-        last_error = None
-        for quarter in candidates:
-            try:
-                return await self.fetch_transcript(ticker, quarter)
-            except ValueError as e:
-                last_error = e
-                continue
-
-        raise ValueError(
-            f"No transcript found for {ticker}. "
-            f"Last error: {last_error}. Tried quarters: {candidates}"
-        )
+        if response.status_code == 404:
+            if _error_message(response).startswith("Stock"):
+                raise ValueError(f"Invalid ticker: {ticker}")
+            raise ValueError(f"No transcript found for {ticker} {quarter}")
+        if response.status_code == 429:
+            raise ValueError("API limit reached: Equibles' daily request quota is used up")
+        if response.status_code == 401:
+            raise ProviderUnavailableError("The transcript provider rejected the API key")
+        if response.is_error:
+            raise ProviderUnavailableError(f"The transcript provider returned an error ({response.status_code})")
+        return response.json()

@@ -7,7 +7,7 @@ from .database import Base
 
 
 class EarningsCall(Base):
-    """Raw transcript data fetched from Alpha Vantage."""
+    """Raw transcript data fetched from Equibles."""
     __tablename__ = "earnings_calls"
 
     id             = Column(Integer, primary_key=True, index=True)

@@ -5,7 +5,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import EarningsCall
 from app.services.transcript_service import TranscriptService
 
 
@@ -24,19 +23,13 @@ def db_session():
 
 
 class FakeTranscriptClient:
-    def __init__(self, responses=None, latest_response=None):
+    def __init__(self, responses=None):
         self.responses = responses or {}
-        self.latest_response = latest_response
         self.fetch_transcript_calls = []
-        self.fetch_latest_calls = []
 
     async def fetch_transcript(self, ticker, quarter):
         self.fetch_transcript_calls.append((ticker, quarter))
         return self.responses[(ticker.upper(), quarter)]
-
-    async def fetch_latest(self, ticker):
-        self.fetch_latest_calls.append(ticker)
-        return self.latest_response
 
 
 SAMPLE_TURNS = [
@@ -79,25 +72,3 @@ def test_fetch_and_store_skips_api_call_when_already_fetched(db_session):
 
     assert first.id == second.id
     assert len(client.fetch_transcript_calls) == 1
-
-
-def test_fetch_latest_and_store_creates_row(db_session):
-    client = FakeTranscriptClient(latest_response=sample_data(quarter="2024Q2"))
-    service = TranscriptService(db_session, client=client)
-
-    call = run(service.fetch_latest_and_store("AAPL"))
-
-    assert call.quarter == "2024Q2"
-    assert client.fetch_latest_calls == ["AAPL"]
-
-
-def test_fetch_latest_and_store_skips_duplicate_row(db_session):
-    client = FakeTranscriptClient(latest_response=sample_data(quarter="2024Q2"))
-    service = TranscriptService(db_session, client=client)
-
-    first = run(service.fetch_latest_and_store("AAPL"))
-    second = run(service.fetch_latest_and_store("AAPL"))
-
-    assert first.id == second.id
-    assert len(client.fetch_latest_calls) == 2  # API is still called each time
-    assert db_session.query(EarningsCall).count() == 1  # but no duplicate row

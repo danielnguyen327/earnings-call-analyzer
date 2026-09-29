@@ -6,14 +6,14 @@ AI-powered earnings call analysis. Enter a ticker and quarter, and CallScope fet
 
 - **Backend**: FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React, Vite, Tailwind CSS
-- **Data**: [Alpha Vantage](https://www.alphavantage.co/) for earnings call transcripts and company search
+- **Data**: [Equibles](https://equibles.com/) for earnings call transcripts, Nasdaq's public symbol directory for company search (no key needed)
 - **AI**: [Claude](https://www.anthropic.com/) (Anthropic) for structured analysis
 
 ## Setup
 
 ### Option A — Docker Compose (recommended)
 
-1. Create `backend/.env` (see [Environment variables](#environment-variables) below) — only `ALPHA_VANTAGE_API_KEY` and `ANTHROPIC_API_KEY` are needed; `DATABASE_URL` is overridden by Compose.
+1. Create `backend/.env` (see [Environment variables](#environment-variables) below) — only `EQUIBLES_API_KEY` and `ANTHROPIC_API_KEY` are needed; `DATABASE_URL` is overridden by Compose.
 2. From the project root:
    ```bash
    docker compose up --build
@@ -54,7 +54,7 @@ Set these in `backend/.env`:
 
 | Variable | Description |
 |---|---|
-| `ALPHA_VANTAGE_API_KEY` | Get a free key at [alphavantage.co/support/#api-key](https://www.alphavantage.co/support/#api-key). Free tier is capped at **25 requests/day** — see [Known limitations](#known-limitations). |
+| `EQUIBLES_API_KEY` | Get a free key at [equibles.com](https://equibles.com/). Free tier allows **100 requests/day**; a transcript fetch uses one (two for calls with over 200 speaker turns). |
 | `ANTHROPIC_API_KEY` | Get a key at [console.anthropic.com](https://console.anthropic.com/). |
 | `DATABASE_URL` | e.g. `postgresql://postgres:postgres@localhost:5432/earnings_analyzer`. Ignored under Docker Compose (auto-set to point at the `db` service). |
 | `APP_ENV` | `development` (or anything — informational only). |
@@ -67,7 +67,7 @@ source venv/bin/activate
 pytest tests/ -v
 ```
 
-Tests use an in-memory SQLite database and mock all external APIs (Alpha Vantage, Claude) — no real network calls or API quota consumed. Note: `app.main` connects to the real `DATABASE_URL` at import time to create tables, so a reachable Postgres instance is still required to run the suite (CI spins up a throwaway one automatically).
+Tests use an in-memory SQLite database and mock all external services (Equibles, Nasdaq's symbol directory, Claude) — no real network calls or API quota consumed. Note: `app.main` connects to the real `DATABASE_URL` at import time to create tables, so a reachable Postgres instance is still required to run the suite (CI spins up a throwaway one automatically).
 
 ## API overview
 
@@ -80,10 +80,12 @@ Tests use an in-memory SQLite database and mock all external APIs (Alpha Vantage
 | `GET /analyses?ticker=` | List analyses for one ticker (or all tickers if omitted) |
 | `GET /analyses/recent` | Most recently analyzed ticker+quarter per ticker |
 | `DELETE /analyses?ticker=` | Clear analysis history (all, or one ticker) |
-| `GET /companies/search?q=` | Company name → ticker lookup, for autocomplete |
+| `GET /companies/search?q=` | Company name → ticker lookup from Nasdaq's symbol directory, for autocomplete |
 
 All fetch/analyze endpoints are deduplicated: an already-fetched transcript or already-run analysis is served from Postgres instead of re-calling the external API.
 
 ## Known limitations
 
-- Alpha Vantage's free tier allows **25 requests/day** across transcript fetches and company search combined. Once exhausted, new (uncached) searches fail until the quota resets — already-analyzed tickers/quarters keep working since they're served from the database.
+- Quarters follow each company's **fiscal** calendar, as Equibles reports them — e.g. NVIDIA's May 2026 call is `2027Q1`.
+- Equibles' free tier allows **100 requests/day**. Already-fetched tickers/quarters don't count against it, since they're served from the database.
+- Company search covers US-listed stocks (Nasdaq, NYSE and other US exchanges) and refreshes daily. ETFs, warrants, units and preferred shares are left out.
